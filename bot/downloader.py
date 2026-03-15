@@ -72,8 +72,8 @@ async def _download_with_progress(
     The local server exposes the file at: <LOCAL_API_SERVER_URL>/file/bot<TOKEN>/<file_path>
     """
     tg_file = await bot.get_file(file_id)
-    base = config.local_api_server_url.rstrip("/")
-    file_url = f"{base}/file/bot{bot.token}/{tg_file.file_path}"
+    # In local mode, file_path is already a complete download URL
+    file_url = tg_file.file_path
 
     downloaded = 0
     last_report = 0
