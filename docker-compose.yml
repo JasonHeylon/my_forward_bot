@@ -1,8 +1,19 @@
 services:
+  telegram-bot-api:
+    image: aiogram/telegram-bot-api:latest
+    restart: unless-stopped
+    command: --api-id=${TELEGRAM_API_ID} --api-hash=${TELEGRAM_API_HASH} --local
+    volumes:
+      - telegram-bot-api-data:/var/lib/telegram-bot-api
+    ports:
+      - "8081:8081"
+
   bot:
     build: .
     restart: unless-stopped
     env_file: .env
+    depends_on:
+      - telegram-bot-api
     volumes:
       # Persist OAuth token so it survives container restarts
       - ./tokens:/app/tokens
@@ -10,3 +21,6 @@ services:
       - ./downloads:/app/downloads
       # Google OAuth client secrets (read-only)
       - ./client_secrets.json:/app/client_secrets.json:ro
+
+volumes:
+  telegram-bot-api-data:
