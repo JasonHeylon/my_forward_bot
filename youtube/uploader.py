@@ -116,7 +116,7 @@ async def _upload_chunks(
             }
 
             try:
-                async with httpx.AsyncClient(timeout=300.0) as client:
+                async with httpx.AsyncClient(timeout=None) as client:
                     resp = await client.put(upload_url, headers=headers, content=chunk_data)
 
                 if resp.status_code in (200, 201):
