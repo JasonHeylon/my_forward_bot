@@ -95,13 +95,44 @@ cp .env.example .env       # 填写 TELEGRAM_BOT_TOKEN 等配置
 python main.py --auth      # 浏览器授权，生成 tokens/youtube_token.json
 ```
 
-## 本地运行
+## 本地测试
+
+### 完整步骤
 
 ```bash
+# 1. 安装依赖
 pip install -r requirements.txt
-cp .env.example .env       # 填写配置
-# 完成 YouTube 授权后
+
+# 2. 配置环境变量
+cp .env.example .env
+# 编辑 .env，填入 TELEGRAM_BOT_TOKEN（其他项保持默认即可）
+
+# 3. 放置 Google OAuth 配置
+# 将从 Google Cloud Console 下载的文件放到项目根目录，命名为 client_secrets.json
+
+# 4. YouTube 授权（浏览器会自动打开）
+python main.py --auth
+# 授权完成后生成 tokens/youtube_token.json
+
+# 5. 启动 Bot
 python main.py
+```
+
+### 测试验证
+
+Bot 启动后，在 Telegram 中给 Bot 发一个视频（或转发含视频的消息）：
+
+- 终端会输出处理日志
+- Telegram 中会看到进度消息实时更新
+- 完成后进入 YouTube Studio → 内容，确认视频以**私密**状态上传成功
+
+> **建议先用小文件测试**：本地上行带宽有限，1GB 视频上传会很慢。建议先用几十 MB 的小视频验证整个流程，确认无误后再测试大文件。
+
+### Token 失效时重新授权
+
+```bash
+rm tokens/youtube_token.json
+python main.py --auth
 ```
 
 ## Docker 部署
