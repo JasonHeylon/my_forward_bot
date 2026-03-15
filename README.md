@@ -8,7 +8,7 @@ Forward any message containing a video to the bot. It will download the video, u
 
 - Handles forwarded video messages (video, document-type video files, video_note)
 - Generates YouTube title and description directly from Telegram message content
-- Supports large files (200 MB – 1.5 GB) with streaming download (no full-file memory load)
+- Supports large files (200 MB – 1.5 GB) via Telegram Local Bot API Server (see setup below)
 - YouTube resumable upload with automatic recovery from network interruptions
 - Real-time progress updates in Telegram throughout the process
 - Temporary files are deleted from the server automatically after upload
@@ -27,7 +27,7 @@ my-forward-bot/
 │
 ├── bot/
 │   ├── handlers.py          # Core pipeline: extract → download → upload → reply
-│   ├── downloader.py        # Video download (≤20 MB via API; >20 MB via CDN streaming)
+│   ├── downloader.py        # Video download (≤20 MB via standard API; >20 MB via local server)
 │   └── progress.py          # Throttled in-place Telegram message editor (3s min interval)
 │
 ├── youtube/
@@ -152,19 +152,85 @@ docker compose up -d --build
 docker compose logs -f bot
 ```
 
+## Large File Support (> 20 MB)
+
+The standard Telegram Bot API only allows bots to download files up to **20 MB**. For larger files (200 MB – 1.5 GB), you must run a **Telegram Local Bot API Server**.
+
+### Setting up the Local Bot API Server
+
+1. Get your `api_id` and `api_hash` from [my.telegram.org](https://my.telegram.org)
+
+2. Add credentials to your `.env`:
+   ```
+   TELEGRAM_API_ID=12345678
+   TELEGRAM_API_HASH=abcdef1234567890abcdef1234567890
+   LOCAL_API_SERVER_URL=http://localhost:8081
+   ```
+
+3. Download and run the server:
+   ```bash
+   # Load variables from .env into the current shell, then use them in the command
+   export $(grep -v '^#' .env | xargs)
+
+   docker run -d --name telegram-bot-api \
+     -p 8081:8081 \
+     -v telegram-bot-api-data:/var/lib/telegram-bot-api \
+     aiogram/telegram-bot-api:latest \
+     --api-id=${TELEGRAM_API_ID} \
+     --api-hash=${TELEGRAM_API_HASH} \
+     --local
+   ```
+
+   > **Recommended:** Use the docker-compose approach below instead — it handles variable substitution automatically.
+
+With the local server running, the bot can handle files up to **2 GB**.
+
+### docker-compose with local server included
+
+Add this service to your `docker-compose.yml`:
+
+```yaml
+services:
+  telegram-bot-api:
+    image: aiogram/telegram-bot-api:latest
+    command: --api-id=${TELEGRAM_API_ID} --api-hash=${TELEGRAM_API_HASH} --local
+    volumes:
+      - telegram-bot-api-data:/var/lib/telegram-bot-api
+    ports:
+      - "8081:8081"
+
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      - telegram-bot-api
+    volumes:
+      - ./tokens:/app/tokens
+      - ./downloads:/app/downloads
+      - ./client_secrets.json:/app/client_secrets.json:ro
+
+volumes:
+  telegram-bot-api-data:
+```
+
+Then set `LOCAL_API_SERVER_URL=http://telegram-bot-api:8081` in `.env`.
+
 ## Environment Variables
 
 Copy `.env.example` to `.env` and fill in the values:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `TELEGRAM_BOT_TOKEN` | Telegram Bot Token (required) | — |
-| `GOOGLE_CLIENT_SECRETS_FILE` | Path to OAuth client secrets file | `client_secrets.json` |
-| `GOOGLE_TOKEN_FILE` | Path where OAuth token is saved | `tokens/youtube_token.json` |
-| `DOWNLOAD_DIR` | Temporary video download directory | `downloads` |
-| `MAX_FILE_SIZE` | Maximum file size in bytes | `1717986918` (1.6 GB) |
-| `DOWNLOAD_PROGRESS_CHUNK` | Download progress update interval in bytes | `10485760` (10 MB) |
-| `TELEGRAM_DIRECT_DOWNLOAD_THRESHOLD` | Files above this size stream from CDN (bytes) | `20971520` (20 MB) |
+| `TELEGRAM_BOT_TOKEN` | Telegram Bot Token, obtain from @BotFather (required) | — |
+| `LOCAL_API_SERVER_URL` | URL of the Local Bot API Server, required for files > 20 MB | _(empty)_ |
+| `TELEGRAM_API_ID` | Telegram API ID from my.telegram.org, required for local server | _(empty)_ |
+| `TELEGRAM_API_HASH` | Telegram API hash from my.telegram.org, required for local server | _(empty)_ |
+| `GOOGLE_CLIENT_SECRETS_FILE` | Path to the OAuth client secrets JSON downloaded from Google Cloud Console | `client_secrets.json` |
+| `GOOGLE_TOKEN_FILE` | Path where the YouTube OAuth token is saved after running `--auth` | `tokens/youtube_token.json` |
+| `DOWNLOAD_DIR` | Directory for temporary video downloads (deleted after upload) | `downloads` |
+| `MAX_FILE_SIZE` | Maximum accepted file size in bytes | `1717986918` (1.6 GB) |
+| `DOWNLOAD_PROGRESS_CHUNK` | How often to update download progress, in bytes | `10485760` (10 MB) |
 
 ## Usage
 

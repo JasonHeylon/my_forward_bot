@@ -14,7 +14,13 @@ class Config:
     download_dir: Path
     max_file_size: int
     download_progress_chunk: int
-    telegram_direct_download_threshold: int
+    # Optional: URL of a self-hosted Telegram Local Bot API Server.
+    # Required for files larger than 20 MB. Leave empty to use the standard API.
+    local_api_server_url: str | None
+
+    @property
+    def use_local_server(self) -> bool:
+        return bool(self.local_api_server_url)
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -43,9 +49,7 @@ class Config:
             download_dir=Path(os.getenv("DOWNLOAD_DIR", "downloads")),
             max_file_size=int(os.getenv("MAX_FILE_SIZE", str(1717986918))),
             download_progress_chunk=int(os.getenv("DOWNLOAD_PROGRESS_CHUNK", str(10485760))),
-            telegram_direct_download_threshold=int(
-                os.getenv("TELEGRAM_DIRECT_DOWNLOAD_THRESHOLD", str(20971520))
-            ),
+            local_api_server_url=os.getenv("LOCAL_API_SERVER_URL") or None,
         )
 
 

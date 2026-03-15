@@ -41,7 +41,20 @@ def main():
         | filters.Document.MimeType("video/x-msvideo")
     )
 
-    app = Application.builder().token(config.telegram_token).build()
+    builder = Application.builder().token(config.telegram_token)
+
+    if config.use_local_server:
+        # Local Bot API Server mode: required for files > 20 MB
+        base = config.local_api_server_url.rstrip("/")
+        builder = (
+            builder
+            .local_mode(True)
+            .base_url(f"{base}/bot")
+            .base_file_url(f"{base}/file/bot")
+        )
+        logger.info("Using Local Bot API Server: %s", base)
+
+    app = builder.build()
     app.add_handler(MessageHandler(video_filter, handle_video_message))
 
     logger.info("Bot started, polling for messages...")

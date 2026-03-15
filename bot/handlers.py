@@ -24,7 +24,16 @@ _VIDEO_MIME_TYPES = {
 async def handle_video_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.effective_message
 
-    # ── 1. Extract video info ──────────────────────────────────────────────────
+    # ── 1. Deduplicate media groups ────────────────────────────────────────────
+    # When a user sends multiple files at once, Telegram delivers them as
+    # separate messages sharing the same media_group_id. Only process the first.
+    if message.media_group_id:
+        seen: set = context.bot_data.setdefault("seen_media_groups", set())
+        if message.media_group_id in seen:
+            return
+        seen.add(message.media_group_id)
+
+    # ── 2. Extract video info ──────────────────────────────────────────────────
     video_info = _extract_video_info(message)
     if video_info is None:
         await message.reply_text("Could not find a downloadable video in this message. Please send a video file directly.")
@@ -32,7 +41,7 @@ async def handle_video_message(update: Update, context: ContextTypes.DEFAULT_TYP
 
     file_id, file_size, caption, mime_type = video_info
 
-    # ── 2. File size check ─────────────────────────────────────────────────────
+    # ── 3. File size check ─────────────────────────────────────────────────────
     if file_size and file_size > config.max_file_size:
         size_gb = file_size / 1_073_741_824
         max_gb = config.max_file_size / 1_073_741_824
@@ -41,17 +50,17 @@ async def handle_video_message(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         return
 
-    # ── 3. Generate YouTube metadata from Telegram message content ─────────────
+    # ── 4. Generate YouTube metadata from Telegram message content ─────────────
     description = caption or ""
     title = (caption[:20] if caption else "Uploaded Video")
 
-    # ── 4. Send initial status message ────────────────────────────────────────
+    # ── 5. Send initial status message ────────────────────────────────────────
     progress = ProgressReporter(message)
     await progress.send("Starting: downloading video from Telegram...")
 
     local_path: Path | None = None
     try:
-        # ── 5. Download video ──────────────────────────────────────────────────
+        # ── 6. Download video ──────────────────────────────────────────────────
         await context.bot.send_chat_action(message.chat_id, ChatAction.UPLOAD_VIDEO)
         local_path = await download_video(
             bot=context.bot,
@@ -60,7 +69,7 @@ async def handle_video_message(update: Update, context: ContextTypes.DEFAULT_TYP
             progress=progress,
         )
 
-        # ── 6. Upload to YouTube ───────────────────────────────────────────────
+        # ── 7. Upload to YouTube ───────────────────────────────────────────────
         await progress.update(
             f"Uploading to YouTube (private)...\nTitle: {title}",
             force=True,
@@ -73,7 +82,7 @@ async def handle_video_message(update: Update, context: ContextTypes.DEFAULT_TYP
             progress=progress,
         )
 
-        # ── 7. Done ────────────────────────────────────────────────────────────
+        # ── 8. Done ────────────────────────────────────────────────────────────
         youtube_url = f"https://youtu.be/{video_id}"
         await progress.update(
             f"Done! Video saved as private draft.\n\n"
