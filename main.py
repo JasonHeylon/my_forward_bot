@@ -2,6 +2,7 @@ import argparse
 import logging
 
 from telegram.ext import Application, MessageHandler, filters
+from telegram.request import HTTPXRequest
 
 from bot.handlers import handle_video_message
 from config import config
@@ -41,7 +42,9 @@ def main():
         | filters.Document.MimeType("video/x-msvideo")
     )
 
-    builder = Application.builder().token(config.telegram_token)
+    # Use longer timeouts for all Telegram API requests to handle large file downloads
+    request = HTTPXRequest(read_timeout=600, write_timeout=600, connect_timeout=30)
+    builder = Application.builder().token(config.telegram_token).request(request)
 
     if config.use_local_server:
         # Local Bot API Server mode: required for files > 20 MB
