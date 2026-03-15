@@ -23,6 +23,8 @@ services:
       - ./downloads:/app/downloads
       # Google OAuth client secrets (read-only)
       - ./client_secrets.json:/app/client_secrets.json:ro
+      # Share telegram-bot-api file storage so local-mode download_to_drive() works
+      - telegram-bot-api-data:/var/lib/telegram-bot-api:ro
 
 volumes:
   telegram-bot-api-data:

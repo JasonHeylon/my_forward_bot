@@ -22,13 +22,12 @@ async def download_video(
     Download a video from Telegram to the local temp directory.
     Returns the local file path.
 
-    File size limits:
-    - Standard Bot API: getFile only works for files up to 20 MB.
-    - Local Bot API Server (LOCAL_API_SERVER_URL set): supports files up to 2 GB.
+    In local server mode, the telegram-bot-api volume is mounted read-only at
+    /var/lib/telegram-bot-api, so download_to_drive() copies the file directly
+    without going through HTTP — this works for files of any size.
     """
     config.download_dir.mkdir(parents=True, exist_ok=True)
 
-    # Use a hash of file_id as the filename to avoid concurrent download conflicts
     safe_name = hashlib.sha256(file_id.encode()).hexdigest()[:16]
     local_path = config.download_dir / f"{safe_name}.video"
 
@@ -43,57 +42,11 @@ async def download_video(
             f"LOCAL_API_SERVER_URL in your .env file. See README for details."
         )
 
-    if is_large:
-        # Local server mode: stream from the local API server in chunks for progress reporting
-        await _download_with_progress(bot, file_id, file_size, local_path, progress)
-    else:
-        # Standard small file download
-        await _download_small(bot, file_id, local_path, progress)
+    size_mb = f"{file_size / 1_048_576:.0f} MB" if file_size else "unknown size"
+    await progress.update(f"Downloading video ({size_mb})...")
 
+    tg_file = await bot.get_file(file_id)
+    await tg_file.download_to_drive(local_path)
+
+    await progress.update(f"Download complete ({size_mb}).", force=True)
     return local_path
-
-
-async def _download_small(bot: Bot, file_id: str, dest: Path, progress: ProgressReporter):
-    """Use python-telegram-bot's built-in download (works for any size in local server mode)."""
-    tg_file = await bot.get_file(file_id)
-    await tg_file.download_to_drive(dest)
-    await progress.update("Download complete.", force=True)
-
-
-async def _download_with_progress(
-    bot: Bot,
-    file_id: str,
-    file_size: int,
-    dest: Path,
-    progress: ProgressReporter,
-):
-    """
-    Stream the file via the local API server with progress reporting.
-    The local server exposes the file at: <LOCAL_API_SERVER_URL>/file/bot<TOKEN>/<file_path>
-    """
-    tg_file = await bot.get_file(file_id)
-    # In local mode, file_path is already a complete download URL
-    file_url = tg_file.file_path
-
-    downloaded = 0
-    last_report = 0
-
-    async with httpx.AsyncClient(timeout=None) as client:
-        async with client.stream("GET", file_url) as response:
-            response.raise_for_status()
-            async with aiofiles.open(dest, "wb") as f:
-                async for chunk in response.aiter_bytes(chunk_size=1_048_576):  # 1 MB chunks
-                    await f.write(chunk)
-                    downloaded += len(chunk)
-
-                    if downloaded - last_report >= config.download_progress_chunk:
-                        pct = (downloaded / file_size * 100) if file_size else 0
-                        done_mb = downloaded / 1_048_576
-                        size_mb = file_size / 1_048_576
-                        await progress.update(
-                            f"Downloading... {done_mb:.1f} MB / {size_mb:.1f} MB ({pct:.0f}%)"
-                        )
-                        last_report = downloaded
-
-    done_mb = downloaded / 1_048_576
-    await progress.update(f"Download complete: {done_mb:.1f} MB", force=True)
