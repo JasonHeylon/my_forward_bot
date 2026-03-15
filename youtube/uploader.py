@@ -13,7 +13,7 @@ YOUTUBE_UPLOAD_URL = (
     "?uploadType=resumable&part=snippet,status"
 )
 
-# 分块大小必须是 256KB 的整数倍；16MB 是效率与重试代价的平衡点
+# Chunk size must be a multiple of 256KB; 16MB balances efficiency and retry cost
 CHUNK_SIZE = 16 * 1024 * 1024  # 16MB
 
 
@@ -25,12 +25,12 @@ async def upload_to_youtube(
     progress: ProgressReporter,
 ) -> str:
     """
-    将视频文件上传至 YouTube（私密），返回 YouTube video ID。
-    使用断点续传协议，支持大文件和网络中断恢复。
+    Upload a video file to YouTube as private. Returns the YouTube video ID.
+    Uses the resumable upload protocol to support large files and network interruptions.
     """
     creds = get_credentials()
 
-    # 过期时在线程池中刷新（google-auth 是同步库）
+    # Refresh credentials in a thread pool executor (google-auth is a sync library)
     if creds.expired and creds.refresh_token:
         loop = asyncio.get_event_loop()
         from google.auth.transport.requests import Request
@@ -50,8 +50,9 @@ async def _initiate_upload(
     file_size: int,
 ) -> str:
     """
-    向 YouTube 发起断点续传会话，返回 upload session URL（Location header）。
-    视频设置为私密（privacyStatus: private），不会自动公开。
+    Initiate a resumable upload session with YouTube.
+    Returns the upload session URL from the Location response header.
+    Video is set to private (privacyStatus: private) and will never be auto-published.
     """
     body = {
         "snippet": {
@@ -89,13 +90,13 @@ async def _upload_chunks(
     progress: ProgressReporter,
 ) -> str:
     """
-    以 16MB 分块 PUT 上传视频。
+    Upload the video in 16MB chunks using the resumable upload protocol.
 
-    协议说明：
-    - 308 Resume Incomplete：分块已接收，继续下一块
-    - 200/201：上传完成，解析 video_id
-    - 5xx：指数退避重试（最多 5 次）
-    - 网络中断：查询断点后续传
+    Protocol responses:
+    - 308 Resume Incomplete: chunk accepted, continue with next chunk
+    - 200/201: upload complete, parse and return video_id
+    - 5xx: exponential backoff retry (up to 5 attempts)
+    - Network interruption: query resume offset, then continue from that byte
     """
     uploaded = 0
     retry_count = 0
@@ -124,10 +125,10 @@ async def _upload_chunks(
 
                 if resp.status_code == 308:
                     uploaded = chunk_end + 1
-                    retry_count = 0
+                    retry_count = 0  # Reset retry counter on successful chunk
                     pct = uploaded / file_size * 100
                     await progress.update(
-                        f"正在上传到 YouTube：{uploaded / 1_048_576:.0f} MB"
+                        f"Uploading to YouTube: {uploaded / 1_048_576:.0f} MB"
                         f" / {file_size / 1_048_576:.0f} MB ({pct:.0f}%)"
                     )
                     await f.seek(uploaded)
@@ -135,7 +136,7 @@ async def _upload_chunks(
 
                 if resp.status_code >= 500:
                     raise httpx.HTTPStatusError(
-                        f"服务器错误 {resp.status_code}",
+                        f"Server error {resp.status_code}",
                         request=resp.request,
                         response=resp,
                     )
@@ -146,27 +147,27 @@ async def _upload_chunks(
                 retry_count += 1
                 if retry_count > max_retries:
                     raise RuntimeError(
-                        f"上传失败，已重试 {max_retries} 次：{exc}"
+                        f"Upload failed after {max_retries} retries: {exc}"
                     ) from exc
 
                 wait = 2 ** retry_count
                 await progress.update(
-                    f"上传中断，{wait}s 后重试... (第 {retry_count}/{max_retries} 次)",
+                    f"Upload interrupted, retrying in {wait}s... ({retry_count}/{max_retries})",
                     force=True,
                 )
                 await asyncio.sleep(wait)
 
-                # 查询 YouTube 已接收的字节数，从断点处续传
+                # Query how many bytes YouTube has received, then resume from there
                 uploaded = await _query_upload_offset(upload_url, file_size)
                 await f.seek(uploaded)
 
-    raise RuntimeError("上传循环结束但未收到 YouTube video ID。")
+    raise RuntimeError("Upload loop ended without receiving a YouTube video ID.")
 
 
 async def _query_upload_offset(upload_url: str, file_size: int) -> int:
     """
-    查询 YouTube 已成功接收的字节数，用于网络中断后续传。
-    返回下次应从哪个字节开始发送。
+    Query YouTube for the number of bytes successfully received so far.
+    Used to resume an interrupted upload. Returns the byte offset to resume from.
     """
     headers = {
         "Content-Range": f"bytes */{file_size}",
@@ -176,12 +177,12 @@ async def _query_upload_offset(upload_url: str, file_size: int) -> int:
         resp = await client.put(upload_url, headers=headers)
 
     if resp.status_code == 308:
-        # Range: bytes=0-N
+        # Range header format: bytes=0-N
         range_header = resp.headers.get("Range", "bytes=0--1")
         end_byte = int(range_header.split("-")[1])
         return end_byte + 1
 
     if resp.status_code in (200, 201):
-        return file_size  # 已上传完毕
+        return file_size  # Already complete
 
-    raise RuntimeError(f"无法查询上传断点：HTTP {resp.status_code}")
+    raise RuntimeError(f"Could not query upload offset: HTTP {resp.status_code}")

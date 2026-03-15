@@ -13,15 +13,15 @@ SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 
 def run_oauth_flow() -> Credentials:
     """
-    交互式 OAuth2 授权流程，打开浏览器让用户同意授权。
-    授权完成后将凭证保存至 config.google_token_file。
-    首次运行：python main.py --auth
+    Interactive OAuth2 authorization flow. Opens a browser for user consent.
+    Saves credentials to config.google_token_file on completion.
+    Run once with: python main.py --auth
     """
     flow = InstalledAppFlow.from_client_secrets_file(
         str(config.google_client_secrets_file),
         scopes=SCOPES,
     )
-    # run_local_server 会启动本地 HTTP 服务器接收 OAuth 回调
+    # run_local_server starts a local HTTP server to catch the OAuth redirect
     creds = flow.run_local_server(port=0)
     _save_credentials(creds)
     return creds
@@ -29,14 +29,14 @@ def run_oauth_flow() -> Credentials:
 
 def get_credentials() -> Credentials:
     """
-    加载已保存的凭证，过期时自动刷新并持久化。
-    若 token 文件不存在，抛出 FileNotFoundError（提示用户先运行 --auth）。
+    Load saved credentials, refresh if expired, and persist the refreshed token.
+    Raises FileNotFoundError if the token file does not exist (run --auth first).
     """
     token_path = config.google_token_file
     if not token_path.exists():
         raise FileNotFoundError(
-            f"YouTube token 文件不存在：{token_path}\n"
-            "请先运行：python main.py --auth"
+            f"YouTube token not found: {token_path}\n"
+            "Please run: python main.py --auth"
         )
 
     creds = _load_credentials(token_path)

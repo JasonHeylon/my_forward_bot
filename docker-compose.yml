@@ -4,9 +4,9 @@ services:
     restart: unless-stopped
     env_file: .env
     volumes:
-      # OAuth token 持久化（容器重启后不丢失授权）
+      # Persist OAuth token so it survives container restarts
       - ./tokens:/app/tokens
-      # 临时视频文件（避免占用容器层存储）
+      # Temp video files (avoids filling the container layer storage)
       - ./downloads:/app/downloads
-      # Google OAuth 客户端配置（只读挂载）
+      # Google OAuth client secrets (read-only)
       - ./client_secrets.json:/app/client_secrets.json:ro

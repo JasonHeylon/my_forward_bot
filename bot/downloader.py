@@ -16,12 +16,12 @@ async def download_video(
     progress: ProgressReporter,
 ) -> Path:
     """
-    从 Telegram 下载视频到本地临时目录。
-    返回本地文件路径。
+    Download a video from Telegram to the local temp directory.
+    Returns the local file path.
     """
     config.download_dir.mkdir(parents=True, exist_ok=True)
 
-    # 用 file_id 的哈希值命名，避免并发冲突
+    # Use a hash of file_id as the filename to avoid concurrent download conflicts
     safe_name = hashlib.sha256(file_id.encode()).hexdigest()[:16]
     local_path = config.download_dir / f"{safe_name}.video"
 
@@ -34,10 +34,10 @@ async def download_video(
 
 
 async def _download_small(bot: Bot, file_id: str, dest: Path, progress: ProgressReporter):
-    """≤ 20MB：用 python-telegram-bot 内置方法下载。"""
+    """<= 20MB: use python-telegram-bot's built-in download method."""
     tg_file = await bot.get_file(file_id)
     await tg_file.download_to_drive(dest)
-    await progress.update("下载完成。", force=True)
+    await progress.update("Download complete.", force=True)
 
 
 async def _download_large(
@@ -48,10 +48,10 @@ async def _download_large(
     progress: ProgressReporter,
 ):
     """
-    > 20MB：通过 Telegram CDN 流式下载。
-    1. 调用 bot.get_file() 获取 file_path
-    2. 拼接 CDN URL：https://api.telegram.org/file/bot<TOKEN>/<file_path>
-    3. 用 httpx 以 1MB 块流式写入磁盘，每 10MB 更新一次进度
+    > 20MB: stream directly from the Telegram CDN.
+    1. Call bot.get_file() to get the file_path
+    2. Construct CDN URL: https://api.telegram.org/file/bot<TOKEN>/<file_path>
+    3. Stream via httpx in 1MB chunks, reporting progress every 10MB
     """
     tg_file = await bot.get_file(file_id)
     cdn_url = f"https://api.telegram.org/file/bot{bot.token}/{tg_file.file_path}"
@@ -63,7 +63,7 @@ async def _download_large(
         async with client.stream("GET", cdn_url) as response:
             response.raise_for_status()
             async with aiofiles.open(dest, "wb") as f:
-                async for chunk in response.aiter_bytes(chunk_size=1_048_576):  # 1MB
+                async for chunk in response.aiter_bytes(chunk_size=1_048_576):  # 1MB chunks
                     await f.write(chunk)
                     downloaded += len(chunk)
 
@@ -72,9 +72,9 @@ async def _download_large(
                         size_mb = file_size / 1_048_576
                         done_mb = downloaded / 1_048_576
                         await progress.update(
-                            f"正在下载... {done_mb:.1f} MB / {size_mb:.1f} MB ({pct:.0f}%)"
+                            f"Downloading... {done_mb:.1f} MB / {size_mb:.1f} MB ({pct:.0f}%)"
                         )
                         last_report = downloaded
 
     done_mb = downloaded / 1_048_576
-    await progress.update(f"下载完成：{done_mb:.1f} MB", force=True)
+    await progress.update(f"Download complete: {done_mb:.1f} MB", force=True)

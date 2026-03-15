@@ -9,7 +9,7 @@ from bot.progress import ProgressReporter
 from config import config
 from youtube.uploader import upload_to_youtube
 
-# 支持的视频文档 MIME 类型
+# Supported video MIME types for document messages
 _VIDEO_MIME_TYPES = {
     "video/mp4",
     "video/quicktime",
@@ -24,34 +24,34 @@ _VIDEO_MIME_TYPES = {
 async def handle_video_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.effective_message
 
-    # ── 1. 提取视频信息 ────────────────────────────────────────────────────────
+    # ── 1. Extract video info ──────────────────────────────────────────────────
     video_info = _extract_video_info(message)
     if video_info is None:
-        await message.reply_text("无法识别消息中的可下载视频，请直接发送视频文件。")
+        await message.reply_text("Could not find a downloadable video in this message. Please send a video file directly.")
         return
 
     file_id, file_size, caption, mime_type = video_info
 
-    # ── 2. 文件大小校验 ────────────────────────────────────────────────────────
+    # ── 2. File size check ─────────────────────────────────────────────────────
     if file_size and file_size > config.max_file_size:
         size_gb = file_size / 1_073_741_824
         max_gb = config.max_file_size / 1_073_741_824
         await message.reply_text(
-            f"视频文件过大（{size_gb:.1f} GB），最大支持 {max_gb:.1f} GB。"
+            f"Video is too large ({size_gb:.1f} GB). Maximum supported size is {max_gb:.1f} GB."
         )
         return
 
-    # ── 3. 生成 YouTube 元数据（直接使用 Telegram 消息内容）─────────────────
+    # ── 3. Generate YouTube metadata from Telegram message content ─────────────
     description = caption or ""
-    title = (caption[:20] if caption else "上传的视频")
+    title = (caption[:20] if caption else "Uploaded Video")
 
-    # ── 4. 发送初始状态消息 ────────────────────────────────────────────────────
+    # ── 4. Send initial status message ────────────────────────────────────────
     progress = ProgressReporter(message)
-    await progress.send("开始处理：正在从 Telegram 下载视频...")
+    await progress.send("Starting: downloading video from Telegram...")
 
     local_path: Path | None = None
     try:
-        # ── 5. 下载视频 ────────────────────────────────────────────────────────
+        # ── 5. Download video ──────────────────────────────────────────────────
         await context.bot.send_chat_action(message.chat_id, ChatAction.UPLOAD_VIDEO)
         local_path = await download_video(
             bot=context.bot,
@@ -60,9 +60,9 @@ async def handle_video_message(update: Update, context: ContextTypes.DEFAULT_TYP
             progress=progress,
         )
 
-        # ── 6. 上传到 YouTube ──────────────────────────────────────────────────
+        # ── 6. Upload to YouTube ───────────────────────────────────────────────
         await progress.update(
-            f"正在上传到 YouTube（私密）...\n标题：{title}",
+            f"Uploading to YouTube (private)...\nTitle: {title}",
             force=True,
         )
         video_id = await upload_to_youtube(
@@ -73,29 +73,30 @@ async def handle_video_message(update: Update, context: ContextTypes.DEFAULT_TYP
             progress=progress,
         )
 
-        # ── 7. 完成 ────────────────────────────────────────────────────────────
+        # ── 7. Done ────────────────────────────────────────────────────────────
         youtube_url = f"https://youtu.be/{video_id}"
         await progress.update(
-            f"上传完成！视频已保存为私密草稿。\n\n"
-            f"标题：{title}\n"
-            f"链接：{youtube_url}",
+            f"Done! Video saved as private draft.\n\n"
+            f"Title: {title}\n"
+            f"Link: {youtube_url}",
             force=True,
         )
 
     except Exception as exc:
-        await progress.update(f"处理失败：{exc}\n\n请重试。", force=True)
+        await progress.update(f"Failed: {exc}\n\nPlease try again.", force=True)
         raise
 
     finally:
+        # Always delete the local temp file after success or failure
         if local_path and local_path.exists():
             local_path.unlink()
 
 
 def _extract_video_info(message: Message):
     """
-    从消息中提取视频信息。
-    返回 (file_id, file_size, caption, mime_type) 或 None。
-    支持：message.video、message.document（视频 MIME）、message.video_note
+    Extract video info from a message.
+    Returns (file_id, file_size, caption, mime_type) or None.
+    Supports: message.video, message.document (video MIME), message.video_note
     """
     if message.video:
         v = message.video

@@ -2,14 +2,14 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# 先复制依赖文件，利用 Docker layer 缓存
+# Copy requirements first to leverage Docker layer caching
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 复制源码
+# Copy source code
 COPY . .
 
-# 创建临时目录（tokens/ 和 downloads/ 会通过 volume 挂载）
+# Create temp directories (tokens/ and downloads/ will be mounted as volumes)
 RUN mkdir -p downloads tokens
 
 CMD ["python", "main.py"]

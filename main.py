@@ -18,17 +18,17 @@ def main():
     parser.add_argument(
         "--auth",
         action="store_true",
-        help="执行 YouTube OAuth2 首次授权流程后退出",
+        help="Run the YouTube OAuth2 authorization flow and exit",
     )
     args = parser.parse_args()
 
     if args.auth:
         from youtube.auth import run_oauth_flow
         run_oauth_flow()
-        print("YouTube 授权成功！Token 已保存至", config.google_token_file)
+        print("YouTube authorization successful. Token saved to", config.google_token_file)
         return
 
-    # 构建支持的视频消息过滤器
+    # Build the video message filter
     video_filter = (
         filters.VIDEO
         | filters.VIDEO_NOTE
@@ -44,7 +44,7 @@ def main():
     app = Application.builder().token(config.telegram_token).build()
     app.add_handler(MessageHandler(video_filter, handle_video_message))
 
-    logger.info("Bot 启动，开始监听消息...")
+    logger.info("Bot started, polling for messages...")
     app.run_polling(allowed_updates=["message"])
 
 
