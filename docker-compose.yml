@@ -3,7 +3,8 @@ services:
     image: aiogram/telegram-bot-api:latest
     restart: unless-stopped
     env_file: .env
-    command: --local
+    environment:
+      - TELEGRAM_LOCAL=1
     volumes:
       - telegram-bot-api-data:/var/lib/telegram-bot-api
     ports:
