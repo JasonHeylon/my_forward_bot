@@ -2,7 +2,8 @@ services:
   telegram-bot-api:
     image: aiogram/telegram-bot-api:latest
     restart: unless-stopped
-    command: --api-id=${TELEGRAM_API_ID} --api-hash=${TELEGRAM_API_HASH} --local
+    env_file: .env
+    command: --local
     volumes:
       - telegram-bot-api-data:/var/lib/telegram-bot-api
     ports:
