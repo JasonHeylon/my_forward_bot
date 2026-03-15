@@ -1,0 +1,28 @@
+# 环境与密钥
+.env
+client_secrets.json
+tokens/
+!tokens/.gitkeep
+
+# 下载的临时视频
+downloads/*.video
+downloads/*.mp4
+downloads/*.mkv
+downloads/*.webm
+downloads/*.mov
+downloads/*.avi
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

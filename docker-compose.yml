@@ -1,0 +1,12 @@
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      # OAuth token 持久化（容器重启后不丢失授权）
+      - ./tokens:/app/tokens
+      # 临时视频文件（避免占用容器层存储）
+      - ./downloads:/app/downloads
+      # Google OAuth 客户端配置（只读挂载）
+      - ./client_secrets.json:/app/client_secrets.json:ro
