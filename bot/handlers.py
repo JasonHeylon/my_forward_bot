@@ -54,13 +54,22 @@ async def handle_video_message(update: Update, context: ContextTypes.DEFAULT_TYP
     description = caption or ""
     title = (caption[:20] if caption else "Uploaded Video")
 
-    # ── 5. Send initial status message ────────────────────────────────────────
+    # ── 5. Repost to channel (if configured) ──────────────────────────────────
+    # Use send_video with file_id so it appears as a new message, not a forward
+    if config.target_channel_id:
+        await context.bot.send_video(
+            chat_id=config.target_channel_id,
+            video=file_id,
+            caption=caption,
+        )
+
+    # ── 6. Send initial status message ────────────────────────────────────────
     progress = ProgressReporter(message)
     await progress.send("Starting: downloading video from Telegram...")
 
     local_path: Path | None = None
     try:
-        # ── 6. Download video ──────────────────────────────────────────────────
+        # ── 7. Download video ──────────────────────────────────────────────────
         await context.bot.send_chat_action(message.chat_id, ChatAction.UPLOAD_VIDEO)
         local_path = await download_video(
             bot=context.bot,
@@ -69,7 +78,7 @@ async def handle_video_message(update: Update, context: ContextTypes.DEFAULT_TYP
             progress=progress,
         )
 
-        # ── 7. Upload to YouTube ───────────────────────────────────────────────
+        # ── 8. Upload to YouTube ───────────────────────────────────────────────
         await progress.update(
             f"Uploading to YouTube (private)...\nTitle: {title}",
             force=True,
@@ -82,7 +91,7 @@ async def handle_video_message(update: Update, context: ContextTypes.DEFAULT_TYP
             progress=progress,
         )
 
-        # ── 8. Done ────────────────────────────────────────────────────────────
+        # ── 9. Done ────────────────────────────────────────────────────────────
         youtube_url = f"https://youtu.be/{video_id}"
         await progress.update(
             f"Done! Video saved as private draft.\n\n"

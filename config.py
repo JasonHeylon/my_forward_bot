@@ -17,6 +17,8 @@ class Config:
     # Optional: URL of a self-hosted Telegram Local Bot API Server.
     # Required for files larger than 20 MB. Leave empty to use the standard API.
     local_api_server_url: str | None
+    # Optional: Telegram channel to repost videos to (bot must be an admin)
+    target_channel_id: str | None
 
     @property
     def use_local_server(self) -> bool:
@@ -50,6 +52,7 @@ class Config:
             max_file_size=int(os.getenv("MAX_FILE_SIZE", str(1717986918))),
             download_progress_chunk=int(os.getenv("DOWNLOAD_PROGRESS_CHUNK", str(10485760))),
             local_api_server_url=os.getenv("LOCAL_API_SERVER_URL") or None,
+            target_channel_id=os.getenv("TELEGRAM_CHANNEL_ID") or None,
         )
 
 
