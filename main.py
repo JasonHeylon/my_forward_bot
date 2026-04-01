@@ -1,10 +1,10 @@
 import argparse
 import logging
 
-from telegram.ext import Application, MessageHandler, filters
+from telegram.ext import Application, CallbackQueryHandler, MessageHandler, filters
 from telegram.request import HTTPXRequest
 
-from bot.handlers import handle_video_message
+from bot.handlers import handle_action_callback, handle_video_message
 from config import config
 
 logging.basicConfig(
@@ -59,9 +59,10 @@ def main():
 
     app = builder.build()
     app.add_handler(MessageHandler(video_filter, handle_video_message))
+    app.add_handler(CallbackQueryHandler(handle_action_callback, pattern="^action:"))
 
     logger.info("Bot started, polling for messages...")
-    app.run_polling(allowed_updates=["message"])
+    app.run_polling(allowed_updates=["message", "callback_query"])
 
 
 if __name__ == "__main__":
