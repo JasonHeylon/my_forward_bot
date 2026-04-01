@@ -41,6 +41,9 @@ async def handle_video_message(update: Update, context: ContextTypes.DEFAULT_TYP
 
     file_id, file_size, caption, mime_type = video_info
 
+    # Extract caption from either caption field or text field (for forwarded messages)
+    caption = caption or message.text or message.caption_html or ""
+
     # ── 3. File size check ─────────────────────────────────────────────────────
     if file_size and file_size > config.max_file_size:
         size_gb = file_size / 1_073_741_824
