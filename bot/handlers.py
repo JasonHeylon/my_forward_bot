@@ -73,6 +73,12 @@ async def handle_video_message(update: Update, context: ContextTypes.DEFAULT_TYP
         ],
         [
             InlineKeyboardButton(
+                "📺 Upload to YouTube Only",
+                callback_data=f"action:upload_only:{message.message_id}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
                 "➡️ Forward to Channel Only",
                 callback_data=f"action:forward_only:{message.message_id}"
             )
@@ -130,6 +136,82 @@ async def handle_action_callback(update: Update, context: ContextTypes.DEFAULT_T
     if action == "cancel":
         await query.edit_message_text("❌ Cancelled.")
         del context.bot_data[f"video:{msg_id}"]
+        return
+
+    # ── Handle Upload Only ─────────────────────────────────────────────────────
+    if action == "upload_only":
+        context.bot_data["processing_video"] = msg_id
+
+        description = caption or ""
+        title = (caption[:20] if caption else "Uploaded Video")
+
+        await query.edit_message_text("Starting: downloading video from Telegram...")
+
+        # Create a ProgressReporter that edits the callback message
+        class CallbackProgressReporter:
+            def __init__(self, callback_query):
+                self._query = callback_query
+                self._last_update = 0.0
+
+            async def send(self, text: str):
+                await self._query.edit_message_text(text)
+                return self._query.message
+
+            async def update(self, text: str, force: bool = False):
+                import time
+                now = time.monotonic()
+                if not force and (now - self._last_update) < 3.0:
+                    return
+                try:
+                    await self._query.edit_message_text(text)
+                    self._last_update = now
+                except Exception:
+                    pass
+
+        progress = CallbackProgressReporter(query)
+        local_path: Path | None = None
+
+        try:
+            # Download video
+            await context.bot.send_chat_action(query.message.chat_id, ChatAction.UPLOAD_VIDEO)
+            local_path = await download_video(
+                bot=context.bot,
+                file_id=file_id,
+                file_size=file_size,
+                progress=progress,
+            )
+
+            # Upload to YouTube
+            await progress.update(
+                f"Uploading to YouTube (private)...\nTitle: {title}",
+                force=True,
+            )
+            video_id = await upload_to_youtube(
+                file_path=local_path,
+                title=title,
+                description=description,
+                mime_type=mime_type or "video/mp4",
+                progress=progress,
+            )
+
+            # Done
+            youtube_url = f"https://youtu.be/{video_id}"
+            await progress.update(
+                f"✅ Done!\n\n"
+                f"Title: {title}\n"
+                f"YouTube: {youtube_url}",
+                force=True,
+            )
+
+        except Exception as exc:
+            await progress.update(f"❌ Failed: {exc}\n\nPlease try again.", force=True)
+            raise
+
+        finally:
+            if local_path and local_path.exists():
+                local_path.unlink()
+            context.bot_data.pop("processing_video", None)
+            del context.bot_data[f"video:{msg_id}"]
         return
 
     # ── Handle Forward Only ────────────────────────────────────────────────────
