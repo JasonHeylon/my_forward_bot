@@ -42,11 +42,18 @@ async def handle_video_message(update: Update, context: ContextTypes.DEFAULT_TYP
     file_id, file_size, caption, mime_type = video_info
 
     # Extract caption from either caption field or text field (for forwarded messages)
-    caption = caption or message.text or message.caption_html or ""
-
-    # Debug: log the extracted caption
+    # Also check forward_origin for forwarded messages
     import logging
-    logging.info(f"Extracted caption: {repr(caption)}, message.text: {repr(message.text)}, message.caption: {repr(message.caption)}")
+
+    # Debug: log message structure
+    logging.info(f"message.caption: {repr(message.caption)}")
+    logging.info(f"message.text: {repr(message.text)}")
+    logging.info(f"message.caption_html: {repr(message.caption_html)}")
+    if message.forward_origin:
+        logging.info(f"forward_origin type: {type(message.forward_origin)}")
+        logging.info(f"forward_origin: {message.forward_origin}")
+
+    caption = caption or message.text or message.caption_html or ""
 
     # ── 3. File size check ─────────────────────────────────────────────────────
     if file_size and file_size > config.max_file_size:
